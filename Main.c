@@ -1,7 +1,7 @@
 #include <p30F6014a.h>
 #include <libpic30.h>
-#include "ETM_BUFFER_BYTE_64.h"
-#include "ETM_IO_PORTS_V3.h"
+#include "LTC2656.h"
+
 
 _FOSC(ECIO & CSW_FSCM_OFF); 
 _FWDT(WDT_ON & WDTPSA_1 & WDTPSB_2); 
@@ -11,20 +11,19 @@ _FSS(WR_PROT_SEC_OFF & NO_SEC_CODE & NO_SEC_EEPROM & NO_SEC_RAM);
 _FGS(CODE_PROT_OFF);
 _FICD(PGD);
 
-
+LTC2656 U44_LTC2656;
 
 int main(void) {
-  Nop();
-  Nop();
-  Nop();
-  Nop();
-  Nop();
-  ETMSetPin(_PIN_RC13);
-  Nop();
-  Nop();
-  Nop();
-  Nop();  
-  ETMClearPin(_PIN_RC13);
+  
+  U44_LTC2656.pin_cable_select_not = _PIN_RD15;
+  U44_LTC2656.pin_dac_clear_not = _PIN_RB15;
+  U44_LTC2656.pin_load_dac_not = _PIN_RD14;
+  U44_LTC2656.pin_por_select = _PIN_NOT_CONNECTED;
+  U44_LTC2656.por_select_value = 0;
+  U44_LTC2656.spi_port = SPI_PORT_1;
+  
+  SetupLTC2656(&U44_LTC2656);
+
 
   while (1) {
     Nop();

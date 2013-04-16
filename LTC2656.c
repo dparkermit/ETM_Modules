@@ -3,7 +3,8 @@
 
 
 // DPARKER - I know that there are problems with the multichannel DAC command from monitoring the LINAC System.  This needs to be debugged
-
+// DPARKER - On recent testing in lab it appears to work (300us write time or so, I don't know what the problem was before)
+// DPARKER - Consider trying to figure out how to use the LDAC pin.  Is it even possible with our methodology
 
 #define LTC2656_OLL_SELECT_CHIP                      0
 #define LTC2656_OLL_CLEAR_OUTPUTS                    0
@@ -16,23 +17,27 @@
 
 void SetupLTC2656(LTC2656* ptr_LTC2656) {
   // See h File For Documentation
+
+  ETMSetPin(ptr_LTC2656->pin_dac_clear_not);
+  ETMClearPin(ptr_LTC2656->pin_load_dac_not);
+  ETMSetPin(ptr_LTC2656->pin_cable_select_not);
+  if (ptr_LTC2656->por_select_value) {
+    ETMSetPin(ptr_LTC2656->pin_por_select);
+  } else {
+    ETMClearPin(ptr_LTC2656->pin_por_select);
+  }
   
-  PinSetValue(ptr_LTC2656->pin_dac_clear, !LTC2656_OLL_CLEAR_OUTPUTS);
-  PinSetValue(ptr_LTC2656->pin_load_dac, LTC2656_OLL_LOAD_DAC);
-  PinSetValue(ptr_LTC2656->pin_cable_select, !LTC2656_OLL_SELECT_CHIP);
-  PinSetValue(ptr_LTC2656->pin_por_select, ptr_LTC2656->por_select_value);
-  
-  PinSetTris(ptr_LTC2656->pin_cable_select, TRIS_DIGITAL_OUTPUT);
-  PinSetTris(ptr_LTC2656->pin_dac_clear, TRIS_DIGITAL_INPUT);
-  PinSetTris(ptr_LTC2656->pin_load_dac, TRIS_DIGITAL_OUTPUT);
-  PinSetTris(ptr_LTC2656->pin_por_select, TRIS_DIGITAL_OUTPUT);  
+  ETMPinTrisOutput(ptr_LTC2656->pin_cable_select_not);
+  ETMPinTrisOutput(ptr_LTC2656->pin_dac_clear_not);
+  ETMPinTrisOutput(ptr_LTC2656->pin_load_dac_not);
+  ETMPinTrisOutput(ptr_LTC2656->pin_por_select);
 }
 
 
 void ClearOutputsLTC2656(LTC2656* ptr_LTC2656) {
-  PinSetValue(ptr_LTC2656->pin_dac_clear, LTC2656_OLL_CLEAR_OUTPUTS);
+  ETMClearPin(ptr_LTC2656->pin_dac_clear_not);
   __delay32(LTC2656_DELAY_DAC_CLEAR);
-  PinSetValue(ptr_LTC2656->pin_dac_clear, !LTC2656_OLL_CLEAR_OUTPUTS);
+  ETMSetPin(ptr_LTC2656->pin_dac_clear_not);
 }
 
 
@@ -47,8 +52,7 @@ unsigned char WriteLTC2656(LTC2656* ptr_LTC2656, unsigned int command_word, unsi
   
   spi_error = 0;
   
-  PinSetValue(ptr_LTC2656->pin_cable_select, LTC2656_OLL_SELECT_CHIP);
-
+  ETMClearPin(ptr_LTC2656->pin_cable_select_not);
 
   temp = SendAndReceiveSPI(command_word, ptr_LTC2656->spi_port);
   if (temp == 0x11110000) {
@@ -63,10 +67,9 @@ unsigned char WriteLTC2656(LTC2656* ptr_LTC2656, unsigned int command_word, unsi
   }
  
 
-  PinSetValue(ptr_LTC2656->pin_cable_select, !LTC2656_OLL_SELECT_CHIP);
+  ETMSetPin(ptr_LTC2656->pin_cable_select_not);
   __delay32(LTC2656_DELAY_SELECT_CHIP);
-  PinSetValue(ptr_LTC2656->pin_cable_select, LTC2656_OLL_SELECT_CHIP);
-
+  ETMClearPin(ptr_LTC2656->pin_cable_select_not);
 
   if (spi_error == 0) { 
     temp = SendAndReceiveSPI(LTC2656_CMD_NO_OPERATION, ptr_LTC2656->spi_port);
@@ -84,7 +87,7 @@ unsigned char WriteLTC2656(LTC2656* ptr_LTC2656, unsigned int command_word, unsi
     } 
   }
 
-  PinSetValue(ptr_LTC2656->pin_cable_select, !LTC2656_OLL_SELECT_CHIP);
+  ETMSetPin(ptr_LTC2656->pin_cable_select_not);
 
 
   if (command_word_readback != command_word) {
@@ -114,7 +117,7 @@ unsigned char WriteLTC2656AllDacChannels(LTC2656* ptr_LTC2656, unsigned int *dac
   while ((spi_error == 0) && (dac_number < 8)) {
     // Send out two 16 bit words on the SPI BUS
 
-    PinSetValue(ptr_LTC2656->pin_cable_select, LTC2656_OLL_SELECT_CHIP);
+    ETMClearPin(ptr_LTC2656->pin_cable_select_not);
     
     temp = SendAndReceiveSPI(LTC2656_CMD_WRITE_AND_UPDATE_N | dac_number, ptr_LTC2656->spi_port);
     command_word_readback = temp & 0xFFFF;
@@ -140,13 +143,13 @@ unsigned char WriteLTC2656AllDacChannels(LTC2656* ptr_LTC2656, unsigned int *dac
       }   
     }
     
-    PinSetValue(ptr_LTC2656->pin_cable_select, !LTC2656_OLL_SELECT_CHIP);
-    
+    ETMSetPin(ptr_LTC2656->pin_cable_select_not);
+	
     dac_number++;
   }
 
   // Read back the error check from the last command/data string sent out
-  PinSetValue(ptr_LTC2656->pin_cable_select, LTC2656_OLL_SELECT_CHIP);
+  ETMClearPin(ptr_LTC2656->pin_cable_select_not);
 
   if (spi_error == 0) { 
     temp = SendAndReceiveSPI(LTC2656_CMD_NO_OPERATION, ptr_LTC2656->spi_port);
@@ -164,8 +167,7 @@ unsigned char WriteLTC2656AllDacChannels(LTC2656* ptr_LTC2656, unsigned int *dac
     } 
   }
   
-  PinSetValue(ptr_LTC2656->pin_cable_select, !LTC2656_OLL_SELECT_CHIP);
-  
+  ETMSetPin(ptr_LTC2656->pin_cable_select_not);
   
   if (command_word_readback != (LTC2656_CMD_WRITE_AND_UPDATE_N | (dac_number - 1))) {
     spi_error |= 0b00010000;

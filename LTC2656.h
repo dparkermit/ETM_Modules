@@ -23,11 +23,11 @@
 */
 
 typedef struct {
-  unsigned int pin_cable_select;
-  unsigned int pin_dac_clear;
-  unsigned int pin_load_dac;
-  unsigned int pin_por_select;
-  unsigned int por_select_value;
+  unsigned long pin_cable_select_not;
+  unsigned long pin_dac_clear_not;
+  unsigned long pin_load_dac_not;
+  unsigned long pin_por_select;
+  unsigned char por_select_value;
   unsigned char spi_port;
 } LTC2656;
 
