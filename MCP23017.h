@@ -4,33 +4,43 @@
   This module is designed to interface a 16 bit microchip processor with 16 bit I/O Expander
 
   Only I2C Buses 1 and 2 are supported at this time.
+
+  Dan Parker
+  2013_4_18
 */
 
-// DPARKER - Figure out how to remove the need to configure I2C ports separately
+/*
+  This module has been validated on A34760 (pic30F6014A)
+*/
+
+/* 
+   DPARKER - need to add a reset function (and use this at pic resets).  A34760.h hardware does not support this
+   DPARKER - need to add ability to read the Interrupt Pins (will require adding ETMReadPin function to ETM_IO_PORTS module)
+*/
+
+#include "ETM_I2C.h"
+
 
 typedef struct {
-  unsigned int pin_reset;
-  unsigned int pin_int_a;
-  unsigned int pin_int_b;
   unsigned char address;
   unsigned char i2c_port;
+  unsigned long pin_reset;
+  unsigned long pin_int_a;
+  unsigned long pin_int_b;
   unsigned char output_latch_a_in_ram;
   unsigned char output_latch_b_in_ram;
   unsigned char input_port_a_in_ram;
   unsigned char input_port_b_in_ram;
+  unsigned char register_io_dir_a;
+  unsigned char register_io_dir_b;
+  unsigned char register_ipol_a;
+  unsigned char register_ipol_b;
+  unsigned char register_iocon;
+  unsigned int  i2c_configuration;
+  unsigned long baud_rate;
+  unsigned long fcy_clk;
+  unsigned long pulse_gobbler_delay_fcy;
 } MCP23017;
-
-/*
-  This module requires that the I2C bus be initialized externally before calling any of the read or write functions.
-  The exact numbers will vary based on the frequency of your OSC and the Frequency that you want the bus to run at.
-  Initialization should look something like this.
-  Initialization will vary slightly between 24,30, and 33 series chips.
-  See i2c.h for more information
-
-*/
-
-
-
 
 /* 
    The MCP23017 has 21 8-bit control registers.
@@ -108,12 +118,24 @@ typedef struct {
 #define MCP23017_ADDRESS_6                 0b01001100
 #define MCP23017_ADDRESS_7                 0b01001110
 
+unsigned char SetupMCP23017(MCP23017* ptr_MCP23017);
+/*
+  Function Arguments:
+  *ptr_MCP23017 : This is pointer to the structure that defines a particular MCP23017 chip
 
+  Function Return:
+  Will return a startup error code.  
+  If the MCP23017 started up properly it will return an error code between 0 and MCP23017_MAX_ERROR_COUNT which corresponds to the number of errors durring startup
+  If the MCP23017 is unable to startup, it will return 0xFF.
+
+  This function should be called when somewhere during the startup of the processor.
+  This will configure the I2C port and I/O pins (if any are used).
+*/
 
 unsigned int MCP23017WriteSingleByte(MCP23017* ptr_MCP23017, unsigned char MCP23017_register, unsigned char register_data);
 /*
   This function will write a single byte to the register specified by location
-
+  
   This function will return 0x0000 if the operation completes sucessfully
   This function will return 0xFA00 if the operation fails
 */
@@ -136,5 +158,12 @@ unsigned int MCP23017WriteAndConfirmSingleByte(MCP23017* ptr_MCP23017, unsigned 
   This function will return 0xFA00 if the operation fails or there was an error with the data readback
 */
 
+extern unsigned int MCP23017_read_error_count; // This global variable counts the number of times a MCP23017 fails to read a byte
+extern unsigned int MCP23017_write_error_count; // This global variable counts the number of times a MCP23017 fails to write a byte
+extern unsigned int MCP23017_write_verify_error_count; // This global variable counts the number of times a MCP23017 fails to write and verify a byte
+
+
+#define MCP23017_I2C_CON_DEFAULT_100KHZ_400KHZ 0b1011000000100000
+#define MCP23017_I2C_CON_DEFAULT_1MHZ          0b1011001000100000
 
 #endif

@@ -156,7 +156,7 @@ _ETMClearPin:
 	
         .global  _ETMPinTrisInput
         .text
-_ETMPinTrisOutput:
+_ETMPinTrisInput:
 	;; Port should be stored in W1 after function call
 	;; Pin should be stored in W0 after function call
 			
@@ -220,7 +220,7 @@ _ETMPinTrisOutput:
 		
         .global  _ETMPinTrisOutput
         .text
-_ETMPinTrisInput:
+_ETMPinTrisOutput:
 	;; Port should be stored in W1 after function call
 	;; Pin should be stored in W0 after function call
 

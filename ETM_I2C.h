@@ -1,28 +1,31 @@
 /*
   This is an extension of the built in I2C functions that provides more robust operation and easier use.
-
   This has been written work on devices with 1 or 2 I2C ports.
 
-  *****NOTE*****
-  This module requires the use of a timer (so that timeouts can be detected without causing a WDT reset
-  YOU MUST SELECT A TIMER AND CONFIGURE THE TIMEOUT
-
-  I would suggest using the same timer to timeout all "ETM_MODULES" on the chip.
-  Keep in mind that you can't use this timer for any other operations or modify it within an interrupt.
-
+  
   Dan Parker
   2013_04_02
 */
 
 /*
-  DPARKER - This module needs to be validated
-
-  DPARKER - Add I2C configuration functions
+  This module has been validated on A34760 using MCP23017 functions (pic30F6014A).
+  All other applications are suspect
 */
 
 
 #ifndef __ETM_I2C_H
 #define __ETM_I2C_H
+
+#define I2CCON_DEFAULT_SETUP_30F6014A         0b1011000000100000
+
+void ConfigureI2C(unsigned char i2c_port, unsigned int configuration, unsigned long baud_rate, unsigned long fcy_clk, unsigned long pulse_gobbler_delay_fcy);
+/*
+  This function sets up the selected i2c_port with the configuation parameter that is passed in.
+  It also calculates the baud rate register based on the selected baud rate and the system clock.
+  pulse_gobbler_delay_fcy is the inverse of the pulse_gobbler_delay.  Good luck finding this on the data sheet
+  Typical values range from 100ns - 900ns
+*/
+
 
 unsigned int WaitForI2CBusIdle(unsigned char i2c_port);
 /*
@@ -74,18 +77,12 @@ unsigned int GenerateI2CStop(unsigned char i2c_port);
 */
 
 
-
-// A 16 bit timer needs to be dedicated to SPI error checking.
-#define I2C_TIMEOUT_TIMER    4      // Must be in range 1 -> 5
-
-// Select a Timeout - This will be your Instruction Clock * SPI_TIMER_PRESCALE * SPI_TIMEOUT_CYCLES
-#define I2C_TIMER_PRESCALE   1      // Must be 256, 64, 8 or 1,  (if not any of these will default to 1)
-#define I2C_TIMEOUT_CYCLES   4000   // 16 bit Max
-
-
 #define I2C_PORT                 0
 #define I2C_PORT_1               1
 #define I2C_PORT_2               2
+
+extern unsigned int etm_i2c1_error_count; // This global variable counts the number of i2c_errors.  It may be useful for code bebugging and validation
+extern unsigned int etm_i2c2_error_count; // This global variable counts the number of i2c_errors.  It may be useful for code bebugging and validation
 
 
 #endif

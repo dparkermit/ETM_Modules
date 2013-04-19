@@ -5,22 +5,24 @@
 #include "ETM_IO_PORTS.h"
 
 
-// DPARKER - NEED TO FINISH CLEANING THIS MODULE UP
+/*
+  This module is used to interface with a LTC2656 over the SPI bus.
 
 
+  Module Requirements
+  ETM_SPI
+  ETM_IO_PORTS
 
-// ---------------- SPI Configuration for LTC2656 -----------------------//
-/* 
-
-   The SPI port needs to be configured before any calls to functions in this module are made
-   Multiple devices may be connected to the SPI port but the SPI port only needs to be configured once
-   The SPI port should be configured the same for all devices on the same SPI port
-   To use the following definitions, spi.h must be included where this setup is done
-   
-   Set up the configuration parameters for the SPI port used to connect to the LTC2656
-   Set spi.h for more documentation
+  Dan Parker
+  2013_04_17
 
 */
+
+/*
+  This module has been validated on A34760 (pic30F6014).  This board does not use all of the IO pins so it should be further validated on new designs
+*/
+
+
 
 typedef struct {
   unsigned long pin_cable_select_not;
@@ -29,9 +31,18 @@ typedef struct {
   unsigned long pin_por_select;
   unsigned char por_select_value;
   unsigned char spi_port;
+  unsigned int  spi_con1_value;
+  unsigned int  spi_con2_value;
+  unsigned int  spi_stat_value;
+  unsigned long spi_bit_rate;
+  unsigned long fcy_clk;
 } LTC2656;
 
 
+#define LTC2656_SPI_CON_VALUE  0b0000010100111111 // This works for V1 and V2 because common bits are identical and there is no overlap on the non-identical bits
+#define LTC2656_SPI_CON2_VALUE 0b0000000000000000 // This works for V1 and V2 because it is ignored in V1
+#define LTC2656_SPI_STAT_VALUE 0b1010000000000000 // This works for V1 & V2 because they are identical
+  
 /* -------------- DAC Command Definitions ------------------- */
 #define LTC2656_CMD_WRITE_TO_INPUT_REGISTER_N             0b00000000 // writes to input register N
 #define LTC2656_CMD_UPDATE_DAC_REGISTER_N                 0b00010000 // updates output N
@@ -69,7 +80,7 @@ void SetupLTC2656(LTC2656* ptr_LTC2656);
 /*  
    Function Arguments:
    *ptr_LTC2656 : This is pointer to the structure that defines a particular LTC2656 chip
-              
+
    This function should be called when somewhere during the startup of the processor.
    This will configure the SPI port (selected by spi_port) and the CS pin.
 */
@@ -118,5 +129,8 @@ unsigned char WriteLTC2656AllDacChannels(LTC2656* ptr_LTC2656, unsigned int *dac
    If there are any errors bad data may have been written to the DAC so the calling code should attempt to resend the data
 */
 
+
+extern unsigned int LTC2656_single_channel_error_count; // This global variable counts the number of times WriteLTC2656 failed to properly write data.
+extern unsigned int LTC2656_all_channel_error_count; // This global variable counts the number of times WriteLTC2656AllDacChannels failed to properly write data.
 
 #endif

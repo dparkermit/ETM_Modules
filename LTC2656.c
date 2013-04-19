@@ -1,23 +1,20 @@
-#include <libpic30.h>
 #include "LTC2656.h"
 
-
-// DPARKER - I know that there are problems with the multichannel DAC command from monitoring the LINAC System.  This needs to be debugged
-// DPARKER - On recent testing in lab it appears to work (300us write time or so, I don't know what the problem was before)
-// DPARKER - Consider trying to figure out how to use the LDAC pin.  Is it even possible with our methodology
-
-#define LTC2656_OLL_SELECT_CHIP                      0
-#define LTC2656_OLL_CLEAR_OUTPUTS                    0
-#define LTC2656_OLL_LOAD_DAC                         0
-
-#define LTC2656_DELAY_DAC_CLEAR                     10
-#define LTC2656_DELAY_SELECT_CHIP                   10
+/*
+  DPARKER - I know that there are problems with the multichannel DAC command from monitoring the LINAC System.  This needs to be debugged
+  In lab it looked like full dac updates were taking over 1ms.
+  On recent testing in lab it appears to work (300us write time or so, I don't know what the problem was before)
+  The "new version" has been tested at 220uS for full update
+  Consider trying to figure out how to use the LDAC pin.  Is it even possible with our methodology
+*/
 
 
+unsigned int LTC2656_single_channel_error_count = 0;
+unsigned int LTC2656_all_channel_error_count = 0;
 
 void SetupLTC2656(LTC2656* ptr_LTC2656) {
   // See h File For Documentation
-
+  
   ETMSetPin(ptr_LTC2656->pin_dac_clear_not);
   ETMClearPin(ptr_LTC2656->pin_load_dac_not);
   ETMSetPin(ptr_LTC2656->pin_cable_select_not);
@@ -27,16 +24,21 @@ void SetupLTC2656(LTC2656* ptr_LTC2656) {
     ETMClearPin(ptr_LTC2656->pin_por_select);
   }
   
-  ETMPinTrisOutput(ptr_LTC2656->pin_cable_select_not);
   ETMPinTrisOutput(ptr_LTC2656->pin_dac_clear_not);
-  ETMPinTrisOutput(ptr_LTC2656->pin_load_dac_not);
+  ETMPinTrisOutput(ptr_LTC2656->pin_load_dac_not);  
+  ETMPinTrisOutput(ptr_LTC2656->pin_cable_select_not);
   ETMPinTrisOutput(ptr_LTC2656->pin_por_select);
+
+  ConfigureSPI(ptr_LTC2656->spi_port, ptr_LTC2656->spi_con1_value, ptr_LTC2656->spi_con2_value, ptr_LTC2656->spi_stat_value, ptr_LTC2656->spi_bit_rate, ptr_LTC2656->fcy_clk);
 }
 
 
 void ClearOutputsLTC2656(LTC2656* ptr_LTC2656) {
   ETMClearPin(ptr_LTC2656->pin_dac_clear_not);
-  __delay32(LTC2656_DELAY_DAC_CLEAR);
+  __asm__ ("nop");
+  __asm__ ("nop");
+  __asm__ ("nop");
+  __asm__ ("nop");
   ETMSetPin(ptr_LTC2656->pin_dac_clear_not);
 }
 
@@ -68,7 +70,10 @@ unsigned char WriteLTC2656(LTC2656* ptr_LTC2656, unsigned int command_word, unsi
  
 
   ETMSetPin(ptr_LTC2656->pin_cable_select_not);
-  __delay32(LTC2656_DELAY_SELECT_CHIP);
+  __asm__ ("nop");
+  __asm__ ("nop");
+  __asm__ ("nop");
+  __asm__ ("nop");
   ETMClearPin(ptr_LTC2656->pin_cable_select_not);
 
   if (spi_error == 0) { 
@@ -97,7 +102,9 @@ unsigned char WriteLTC2656(LTC2656* ptr_LTC2656, unsigned int command_word, unsi
     spi_error |= 0b00100000;
   }
   
-
+  if (spi_error != 0) {
+    LTC2656_single_channel_error_count++;
+  }
   return spi_error;
 }
 
@@ -142,9 +149,8 @@ unsigned char WriteLTC2656AllDacChannels(LTC2656* ptr_LTC2656, unsigned int *dac
 	spi_error |= 0b00001000;
       }   
     }
-    
+  
     ETMSetPin(ptr_LTC2656->pin_cable_select_not);
-	
     dac_number++;
   }
 
@@ -176,5 +182,8 @@ unsigned char WriteLTC2656AllDacChannels(LTC2656* ptr_LTC2656, unsigned int *dac
     spi_error |= 0b00100000;
   }
 
+  if (spi_error != 0) {
+    LTC2656_all_channel_error_count++;
+  }
   return spi_error;
 }

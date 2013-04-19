@@ -31,7 +31,7 @@
 */
 
 /*
-  DPARKER - Need to Validate
+  This module has been validated as part of the LTC2656 module on A34760 (p30F6104A).  Validation on more projects should be done
   DPARKER - Add support for reading the value of a pin????
 */
 

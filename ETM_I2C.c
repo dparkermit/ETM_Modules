@@ -10,115 +10,116 @@
 #endif
 
 
+unsigned int etm_i2c1_error_count = 0;
+unsigned int etm_i2c2_error_count = 0;
+
+unsigned int etm_i2c_loop_timeout;
+
+void ConfigureI2C(unsigned char i2c_port, unsigned int configuration, unsigned long baud_rate, unsigned long fcy_clk, unsigned long pulse_gobbler_delay_fcy) {
+
+  unsigned long baud_rate_register;
+  
+  baud_rate_register = (fcy_clk*8)/baud_rate;
 
 
-#if I2C_TIMER_PRESCALE == 256
-#define I2C_TIMER_PRESCALE_BITS 0b11
+  etm_i2c_loop_timeout = baud_rate_register;
+  /*
+    The loop timeout is not ~equal to the number of clock cycles it takes to clock out a byte.
+    Each loop takes at least 10 clock cycles to loop.
+    So dived the number above by 2 should give plenty of margin for error
+  */
+  etm_i2c_loop_timeout >>= 1;
 
-#elif I2C_TIMER_PRESCALE == 64
-#define I2C_TIMER_PRESCALE_BITS 0b10
+  baud_rate_register -= (fcy_clk*8)/pulse_gobbler_delay_fcy;
+  baud_rate_register >>= 3;
+  baud_rate_register -= 1;
 
-#elif I2C_TIMER_PRESCALE == 8
-#define I2C_TIMER_PRESCALE_BITS 0b01
+#if defined(__dsPIC33F__)
+  baud_rate_register -= 1;
+#endif 
+  
+  if (baud_rate_register < 2) {
+    baud_rate_register = 2;
+  }
+  if (baud_rate_register > 0xFFFF) {
+    baud_rate_register = 2;
+  }
 
-#else
-#define I2C_TIMER_PRESCALE_BITS 0b00
-
+#if defined(_I2CMD)
+  if ((i2c_port == 0) || (i2c_port == 1)) {
+    I2CCON = configuration;
+    I2CBRG = baud_rate_register;
+  } 
 #endif
-
-
-
-
-#if I2C_TIMEOUT_TIMER == 5
-// Timer 5 was selected as the timer for I2C Timeout Operation
-#define I2C_TIMER_REGISTER   TMR5
-#define I2C_TIMER_CONFIG     T5CON
-#define I2C_TIMER_CON_BITS   T5CONbits
-#define I2C_TIMER_INT_FLAG   _T5IF
-#define I2C_TIMER_INT_EN     _T5IE
-#define I2C_TIMER_INT_PRI    _T5IP
-#define I2C_TIMER_PERIOD     PR5
-
-#elif I2C_TIMEOUT_TIMER == 4
-// Timer 4 was selected as the timer for I2C Timeout Operation
-#define I2C_TIMER_REGISTER   TMR4
-#define I2C_TIMER_CONFIG     T4CON
-#define I2C_TIMER_CON_BITS   T4CONbits
-#define I2C_TIMER_INT_FLAG   _T4IF
-#define I2C_TIMER_INT_EN     _T4IE
-#define I2C_TIMER_INT_PRI    _T4IP
-#define I2C_TIMER_PERIOD     PR4
-
-#elif I2C_TIMEOUT_TIMER == 3
-// Timer 3 was selected as the timer for I2C Timeout Operation
-#define I2C_TIMER_REGISTER   TMR3
-#define I2C_TIMER_CONFIG     T3CON
-#define I2C_TIMER_CON_BITS   T3CONbits
-#define I2C_TIMER_INT_FLAG   _T3IF
-#define I2C_TIMER_INT_EN     _T3IE
-#define I2C_TIMER_INT_PRI    _T3IP
-#define I2C_TIMER_PERIOD     PR3
-
-#elif I2C_TIMEOUT_TIMER == 2
-// Timer 2 was selected as the timer for I2C Timeout Operation
-#define I2C_TIMER_REGISTER   TMR2
-#define I2C_TIMER_CONFIG     T2CON
-#define I2C_TIMER_CON_BITS   T2CONbits
-#define I2C_TIMER_INT_FLAG   _T2IF
-#define I2C_TIMER_INT_EN     _T2IE
-#define I2C_TIMER_INT_PRI    _T2IP
-#define I2C_TIMER_PERIOD     PR2
-
-#elif I2C_TIMEOUT_TIMER == 1
-// Timer 1 was selected as the timer for I2C Timeout Operation
-#define I2C_TIMER_REGISTER   TMR1
-#define I2C_TIMER_CONFIG     T1CON
-#define I2C_TIMER_CON_BITS   T1CONbits
-#define I2C_TIMER_INT_FLAG   _T1IF
-#define I2C_TIMER_INT_EN     _T1IE
-#define I2C_TIMER_INT_PRI    _T1IP
-#define I2C_TIMER_PERIOD     PR1
-
+  
+#if defined(_I2C1MD)  
+  if (i2c_port = 1) {
+    I2C1CON = configuration;
+    I2C1BRG = baud_rate_register;
+  }
+#endif    
+  
+#if defined(_I2C2MD) 
+  if (i2c_port = 2) {
+    I2C2CON = configuration;
+    I2C2BRG = baud_rate_register;
+  }
 #endif
-
-
-#define I2C_TxCON_VALUE 0x0000
-
-
-
+}
 
 unsigned int WaitForI2CBusIdle(unsigned char i2c_port) {
   
-  I2C_TIMER_REGISTER = 0;
-  I2C_TIMER_PERIOD = I2C_TIMEOUT_CYCLES;
-  I2C_TIMER_INT_FLAG = 0;
-  I2C_TIMER_CONFIG = I2C_TxCON_VALUE;
-  I2C_TIMER_CON_BITS.TON = 1;
-  I2C_TIMER_CON_BITS.TCKPS = I2C_TIMER_PRESCALE_BITS;
-  
+  unsigned int loop_counter;
+  unsigned int i2c_result;
+
+  i2c_result = 0;
+
 #if defined(_I2CMD)
   if ((i2c_port == 0) || (i2c_port == 1)) {
-    while (I2CSTATbits.TRSTAT && !I2C_TIMER_INT_FLAG);		                 //Wait for bus Idle
+    //Wait for bus Idle or Timeout
+    loop_counter = 0;
+    while (I2CSTATbits.TRSTAT) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;	
+      }
+    }
   }
 #endif
 
 #if defined(_I2C1MD)
   if (i2c_port == 1) {
-    while (I2C1STATbits.TRSTAT && !I2C_TIMER_INT_FLAG);		                 //Wait for bus Idle
+    //Wait for bus Idle or Timeout
+    loop_counter = 0;
+    while (I2C1STATbits.TRSTAT) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;	
+      }
+    }
   }
 #endif
 
 #if defined(_I2C2MD)
   if (i2c_port == 2) {
-    while (I2C2STATbits.TRSTAT && !I2C_TIMER_INT_FLAG);		                 //Wait for bus Idle
+    //Wait for bus Idle or Timeout
+    loop_counter = 0;
+    while (I2C2STATbits.TRSTAT) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c2_error_count++;
+	break;
+      }
+    }
   }
 #endif
-    
-  if (I2C_TIMER_INT_FLAG) {
-    return 0xFA00;
-  } else {
-    return 0x0000;
-  }
+  
+  return i2c_result;
 }
   
 
@@ -126,195 +127,358 @@ unsigned int WaitForI2CBusIdle(unsigned char i2c_port) {
 
 
 unsigned int GenerateI2CStart(unsigned char i2c_port) {
-  I2C_TIMER_REGISTER = 0;
-  I2C_TIMER_PERIOD = I2C_TIMEOUT_CYCLES;
-  I2C_TIMER_INT_FLAG = 0;
-  I2C_TIMER_CON_BITS.TON = 1;
-  I2C_TIMER_CON_BITS.TCKPS = I2C_TIMER_PRESCALE_BITS;
+
+  unsigned int loop_counter;
+  unsigned int i2c_result;
+
+  i2c_result = 0;
   
 #if defined(_I2CMD)
   if ((i2c_port == 0) || (i2c_port == 1)) {
     I2CCONbits.SEN = 1;		                         //Generate Start COndition
-    while (I2CCONbits.SEN && !I2C_TIMER_INT_FLAG);	 //Wait for Start COndition
+    //Wait for Start COndition or Timeout
+    loop_counter = 0;
+    while (I2CCONbits.SEN) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;
+      }
+    }
   }
 #endif
-
+  
 #if defined(_I2C1MD)
   if (i2c_port == 1) {
-    I2C1CONbits.SEN = 1;		                         //Generate Start COndition
-    while (I2C1CONbits.SEN && !I2C_TIMER_INT_FLAG);	 //Wait for Start COndition
+    I2C1CONbits.SEN = 1;	                         //Generate Start COndition
+    //Wait for Start COndition or Timeout
+    loop_counter = 0;
+    while (I2C1CONbits.SEN) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;
+      }
+    }
   }
 #endif
-
+  
 #if defined(_I2C2MD)
   if (i2c_port == 2) {
-    I2C2CONbits.SEN = 1;		                         //Generate Start COndition
-    while (I2C2CONbits.SEN && !I2C_TIMER_INT_FLAG);	 //Wait for Start COndition
+    I2C2CONbits.SEN = 1;	                         //Generate Start COndition
+    //Wait for Start COndition or Timeout
+    loop_counter = 0;
+    while (I2C2CONbits.SEN) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c2_error_count++;
+	break;
+      }
+    }
   }
 #endif
-    
-  if (I2C_TIMER_INT_FLAG) {
-    return 0xFA00;
-  } else {
-    return 0x0000;
-  }
+  
+  return i2c_result;
 }
 
-
+  
 
 unsigned int GenerateI2CRestart(unsigned char i2c_port) {
-  I2C_TIMER_REGISTER = 0;
-  I2C_TIMER_PERIOD = I2C_TIMEOUT_CYCLES;
-  I2C_TIMER_INT_FLAG = 0;
-  I2C_TIMER_CON_BITS.TON = 1;
-  I2C_TIMER_CON_BITS.TCKPS = I2C_TIMER_PRESCALE_BITS;
+  unsigned int loop_counter;
+  unsigned int i2c_result;
+  
+  i2c_result = 0;
   
 #if defined(_I2CMD)
   if ((i2c_port == 0) || (i2c_port == 1)) {
     I2CCONbits.RSEN = 1;	                         //Generate Re-Start COndition
-    while (I2CCONbits.RSEN && !I2C_TIMER_INT_FLAG);	 //Wait for Re-Start COndition
+    //Wait for Re-Start COndition
+    loop_counter = 0;
+    while (I2CCONbits.RSEN) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;
+      }
+    }
   }
 #endif
 
 #if defined(_I2C1MD)
   if (i2c_port == 1) {
     I2C1CONbits.RSEN = 1;		                 //Generate Re-Start COndition
-    while (I2C1CONbits.RSEN && !I2C_TIMER_INT_FLAG);	 //Wait for Re-Start COndition
+    //Wait for Re-Start COndition
+    loop_counter = 0;
+    while (I2C1CONbits.RSEN) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;
+      }
+    }
   }
 #endif
 
 #if defined(_I2C2MD)
   if (i2c_port == 2) {
     I2C2CONbits.RSEN = 1;		                 //Generate Re-Start COndition
-    while (I2C2CONbits.RSEN && !I2C_TIMER_INT_FLAG);	 //Wait for Re-Start COndition
+    //Wait for Re-Start COndition
+    loop_counter = 0;
+    while (I2C2CONbits.RSEN) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c2_error_count++;
+	break;
+      }
+    }
   }
 #endif
     
-  if (I2C_TIMER_INT_FLAG) {
-    return 0xFA00;
-  } else {
-    return 0x0000;
-  }
+  return i2c_result;
 }
 
 
 
 unsigned int WriteByteI2C(unsigned char data, unsigned char i2c_port) {
-  I2C_TIMER_REGISTER = 0;
-  I2C_TIMER_PERIOD = I2C_TIMEOUT_CYCLES;
-  I2C_TIMER_INT_FLAG = 0;
-  I2C_TIMER_CON_BITS.TON = 1;
-  I2C_TIMER_CON_BITS.TCKPS = I2C_TIMER_PRESCALE_BITS;
+  unsigned int loop_counter;
+  unsigned int i2c_result;
+  
+  i2c_result = 0;
   
 #if defined(_I2CMD)
   if ((i2c_port == 0) || (i2c_port == 1)) {
     I2CTRN = (data);                                            //Load data to the transmit buffer
-    while (!I2CSTATbits.TRSTAT && !I2C_TIMER_INT_FLAG);         //Set when transmit process starts
-    while (I2CSTATbits.TRSTAT && !I2C_TIMER_INT_FLAG);          //Cleared at end of Slave ACK
+    // Wait for the transmit process to start
+    loop_counter = 0;
+    while (!I2CSTATbits.TRSTAT) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;
+      }
+    }
+    // Wait for the transmit process to complete (cleared at end of Slave ACK)
+    while (I2CSTATbits.TRSTAT) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;
+      }
+    }
   }
 #endif
 
 #if defined(_I2C1MD)
   if (i2c_port == 1) {
     I2C1TRN = (data);                                           //Load data to the transmit buffer
-    while (!I2C1STATbits.TRSTAT && !I2C_TIMER_INT_FLAG);        //Set when transmit process starts
-    while (I2C1STATbits.TRSTAT && !I2C_TIMER_INT_FLAG);	        //Cleared at end of Slave ACK
+    // Wait for the transmit process to start
+    loop_counter = 0;
+    while (!I2C1STATbits.TRSTAT) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;
+      }
+    }
+    // Wait for the transmit process to complete (cleared at end of Slave ACK)
+    while (I2C1STATbits.TRSTAT) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;
+      }
+    }
   }
 #endif
 
 #if defined(_I2C2MD)
   if (i2c_port == 2) {
     I2C2TRN = (data);                                           //Load data to the transmit buffer
-    while (!I2C2STATbits.TRSTAT && !I2C_TIMER_INT_FLAG);        //Set when transmit process starts
-    while (I2C2STATbits.TRSTAT && !I2C_TIMER_INT_FLAG);	        //Cleared at end of Slave ACK
+    // Wait for the transmit process to start
+    loop_counter = 0;
+    while (!I2C2STATbits.TRSTAT) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c2_error_count++;
+	break;
+      }
+    }
+    // Wait for the transmit process to complete (cleared at end of Slave ACK)
+    while (I2C2STATbits.TRSTAT) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c2_error_count++;
+	break;
+      }
+    }
   }
 #endif
     
-  if (I2C_TIMER_INT_FLAG) {
-    return 0xFA00;
-  } else {
-    return 0x0000;
-  }
+  return i2c_result;
 }
 
 unsigned int ReadByteI2C(unsigned char i2c_port) {
-  unsigned char return_data;
-
-  I2C_TIMER_REGISTER = 0;
-  I2C_TIMER_PERIOD = I2C_TIMEOUT_CYCLES;
-  I2C_TIMER_INT_FLAG = 0;
-  I2C_TIMER_CON_BITS.TON = 1;
-  I2C_TIMER_CON_BITS.TCKPS = I2C_TIMER_PRESCALE_BITS;
+  unsigned int loop_counter;
+  unsigned int i2c_result;
   
+  i2c_result = 0;
+
 #if defined(_I2CMD)
   if ((i2c_port == 0) || (i2c_port == 1)) {
     I2CCONbits.RCEN = 1;			                 //Start Master receive
-    while(I2CCONbits.RCEN && !I2C_TIMER_INT_FLAG);               //Wait for data transfer
-    while(!I2CSTATbits.RBF && !I2C_TIMER_INT_FLAG);              //Wait for receive bufer to be full
-    return_data = I2CRCV;
+    //Wait for data transfer
+    loop_counter = 0;
+    while (I2CCONbits.RCEN) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;
+      }
+    }
+    //Wait for receive bufer to be full
+    while (!I2CSTATbits.RBF) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;
+      }
+    }
+    if (i2c_result == 0) {
+      i2c_result = (I2CRCV & 0x00FF);
+    }
   }
 #endif
 
 #if defined(_I2C1MD)
   if (i2c_port == 1) {
     I2C1CONbits.RCEN = 1;			                 //Start Master receive
-    while(I2C1CONbits.RCEN && !I2C_TIMER_INT_FLAG);               //Wait for data transfer
-    while(!I2C1STATbits.RBF && !I2C_TIMER_INT_FLAG);              //Wait for receive bufer to be full
-    return_data = I2C1RCV;
+    //Wait for data transfer
+    loop_counter = 0;
+    while (I2C1CONbits.RCEN) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;
+      }
+    }
+    //Wait for receive bufer to be full
+    while (!I2C1STATbits.RBF) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;
+      }
+    }
+    if (i2c_result == 0) {
+      i2c_result = (I2C1RCV & 0x00FF);
+    }
   }
 #endif
 
 #if defined(_I2C2MD)
   if (i2c_port == 2) {
     I2C2CONbits.RCEN = 1;			                 //Start Master receive
-    while(I2C2CONbits.RCEN && !I2C_TIMER_INT_FLAG);               //Wait for data transfer
-    while(!I2C2STATbits.RBF && !I2C_TIMER_INT_FLAG);              //Wait for receive bufer to be full
-    return_data = I2C2RCV;
+    //Wait for data transfer
+    loop_counter = 0;
+    while (I2C2CONbits.RCEN) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c2_error_count++;
+	break;
+      }
+    }
+    //Wait for receive bufer to be full
+    while (!I2C2STATbits.RBF) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c2_error_count++;
+	break;
+      }
+    }
+    if (i2c_result == 0) {
+      i2c_result = (I2C2RCV & 0x00FF);
+    }
   }
 #endif
     
-  if (I2C_TIMER_INT_FLAG) {
-    return 0xFA00;
-  } else {
-    return (return_data & 0x00FF);
-  }
+  return i2c_result;
 }
 
 
 
 unsigned int GenerateI2CStop(unsigned char i2c_port) {
-  I2C_TIMER_REGISTER = 0;
-  I2C_TIMER_PERIOD = I2C_TIMEOUT_CYCLES;
-  I2C_TIMER_INT_FLAG = 0;
-  I2C_TIMER_CON_BITS.TON = 1;
-  I2C_TIMER_CON_BITS.TCKPS = I2C_TIMER_PRESCALE_BITS;
+  unsigned int loop_counter;
+  unsigned int i2c_result;
   
+  i2c_result = 0;
+
 #if defined(_I2CMD)
   if ((i2c_port == 0) || (i2c_port == 1)) {
     I2CCONbits.PEN = 1;	                                 //Generate Stop COndition
-    while (I2CCONbits.PEN && !I2C_TIMER_INT_FLAG);	 //Wait for Stop COndition
+    //Wait for Stop COndition or Timeout
+    loop_counter = 0;
+    while (I2CCONbits.PEN) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;
+      }
+    }
   }
 #endif
 
 #if defined(_I2C1MD)
   if (i2c_port == 1) {
     I2C1CONbits.PEN = 1;		                 //Generate stop COndition
-    while (I2C1CONbits.PEN && !I2C_TIMER_INT_FLAG);	 //Wait for stop COndition
+    //Wait for Stop COndition or Timeout
+    loop_counter = 0;
+    while (I2C1CONbits.PEN) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c1_error_count++;
+	break;
+      }
+    }
   }
 #endif
 
 #if defined(_I2C2MD)
   if (i2c_port == 2) {
     I2C2CONbits.PEN = 1;		                 //Generate stop COndition
-    while (I2C2CONbits.PEN && !I2C_TIMER_INT_FLAG);	 //Wait for stop COndition
+    //Wait for Stop COndition or Timeout
+    loop_counter = 0;
+    while (I2C1CONbits.PEN) {
+      loop_counter++;
+      if (loop_counter > etm_i2c_loop_timeout) {
+	i2c_result = 0xFA00;
+	etm_i2c2_error_count++;
+	break;
+      }
+    }
   }
 #endif
-    
-  if (I2C_TIMER_INT_FLAG) {
-    return 0xFA00;
-  } else {
-    return 0x0000;
-  }
+
+  return i2c_result;
 }
 
 

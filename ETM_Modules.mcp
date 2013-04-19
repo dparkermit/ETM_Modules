@@ -31,6 +31,7 @@ file_003=.
 file_004=.
 file_005=.
 file_006=.
+file_007=.
 [GENERATED_FILES]
 file_000=no
 file_001=no
@@ -39,6 +40,7 @@ file_003=no
 file_004=no
 file_005=no
 file_006=no
+file_007=no
 [OTHER_FILES]
 file_000=no
 file_001=no
@@ -47,6 +49,7 @@ file_003=no
 file_004=no
 file_005=no
 file_006=no
+file_007=no
 [FILE_INFO]
 file_000=Main.c
 file_001=ETM_BUFFER_BYTE_64.c
@@ -55,6 +58,7 @@ file_003=ETM_SPI.c
 file_004=ETM_DSP_FUNCTIONS.s
 file_005=ETM_IO_PORTS.s
 file_006=LTC2656.c
+file_007=MCP23017.c
 [SUITE_INFO]
 suite_guid={479DDE59-4D56-455E-855E-FFF59A3DB57E}
 suite_state=
