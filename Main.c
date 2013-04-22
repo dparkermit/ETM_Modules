@@ -2,6 +2,7 @@
 #include <libpic30.h>
 #include "MCP23017.h"
 #include "LTC2656.h"
+#include "ETM_DSP_FUNCTIONS.h"
 
 _FOSC(ECIO & CSW_FSCM_OFF); 
 _FWDT(WDT_ON & WDTPSA_1 & WDTPSB_2); 
@@ -14,7 +15,7 @@ _FICD(PGD);
 MCP23017 U64_MCP23017;
 LTC2656 U44_LTC2656;
 
-
+//unsigned int saturation_scale13Q3_count;
 
 #define MCP23017_DEFAULT_IOCON          0b00000000        // Default IOCON settings
 #define MCP23017_U64_IODIRA_VALUE       0b11111000        // Port A.0 -> A.2 are Outputs, A.3-A.7 are inputs
@@ -71,10 +72,50 @@ int main(void) {
   U44_LTC2656.fcy_clk      = 10000000;
   
   
-  
+  /*
   SetupLTC2656(&U44_LTC2656);
+
+  MakeScale13Q3(1157, 353);
   
+  MakeScale13Q3(1157, 5);
+
+  MakeScale13Q3(1157, 1);
   
+  MakeScale13Q3(1157, 0);
+  */
+
+  
+  dan_temp=0;
+  dan_temp=0;
+  i2c_test = Scale13Q3(0x1FFF,0xFFFF);
+  dan_temp=0;
+  dan_temp=0;
+  i2c_test = Scale13Q3(0xD000,0xD000);
+  dan_temp=0;
+  dan_temp=0;
+  i2c_test = Scale13Q3(0xD001,0x0F01);
+  dan_temp=0;
+  dan_temp=0;
+  if (i2c_test) {
+    i2c_test++;
+  }
+
+  dan_temp=0;
+  dan_temp=0;
+  i2c_test = Scale16Bit(1000, 5, 100);
+  dan_temp=0;
+  dan_temp=0;
+  i2c_test = Scale16Bit(1000, 200, 100);
+  dan_temp=0;
+  dan_temp=0;
+  i2c_test = Scale16Bit(1000, 100, 100);
+  dan_temp=0;
+  dan_temp=0;
+  i2c_test = Scale16Bit(1000, 99, 100);
+
+
+
+
   
   while (1) {
     ramp_value += 0x10;
@@ -98,4 +139,5 @@ int main(void) {
       i2c_test |= MCP23017WriteAndConfirmSingleByte(&U64_MCP23017, MCP23017_REGISTER_OLATA, 0xFF);
   }
 }
+
 
