@@ -32,7 +32,7 @@ unsigned int ramp_value = 0;
 
 
 int main(void) {
-  unsigned char dan_temp;
+  unsigned int dan_temp;
   unsigned int i2c_test = 0;
 
   ADPCFG = 0xFFFF;
@@ -113,8 +113,16 @@ int main(void) {
   dan_temp=0;
   i2c_test = Scale16Bit(1000, 99, 100);
 
+  dan_temp = 4;
+  i2c_test = 16 - dan_temp;
 
-
+  dan_temp = RCFilterNTau(100, 1000, 4);
+  i2c_test = dan_temp;
+  dan_temp = RCFilterNTau(0xFFFF, 0xFFFF, 4);
+  i2c_test = dan_temp;  
+  dan_temp = RCFilterNTau(0xFFFF, 0, 4);
+  i2c_test = dan_temp;  
+  dan_temp = RCFilterNTau(0, 137, 12);
 
   
   while (1) {
