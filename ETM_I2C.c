@@ -11,7 +11,10 @@
 
 
 unsigned int etm_i2c1_error_count = 0;
+
+#if defined(_I2C1MD)  
 unsigned int etm_i2c2_error_count = 0;
+#endif
 
 unsigned int etm_i2c_loop_timeout;
 
@@ -30,7 +33,7 @@ void ConfigureI2C(unsigned char i2c_port, unsigned int configuration, unsigned l
   */
   etm_i2c_loop_timeout >>= 1;
 
-  baud_rate_register -= (fcy_clk*8)/pulse_gobbler_delay_fcy;
+  baud_rate_register -= 8*pulse_gobbler_delay_fcy;
   baud_rate_register >>= 3;
   baud_rate_register -= 1;
 

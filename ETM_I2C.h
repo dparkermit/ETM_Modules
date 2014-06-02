@@ -17,6 +17,12 @@
 #define __ETM_I2C_H
 
 #define I2CCON_DEFAULT_SETUP_30F6014A         0b1011000000100000
+#define I2CCON_DEFAULT_SETUP_PIC30F           0b1011000000100000
+
+
+#define I2C_WRITE_CONTROL_BIT   0b00000000
+#define I2C_READ_CONTROL_BIT    0b00000001
+
 
 void ConfigureI2C(unsigned char i2c_port, unsigned int configuration, unsigned long baud_rate, unsigned long fcy_clk, unsigned long pulse_gobbler_delay_fcy);
 /*
@@ -82,7 +88,9 @@ unsigned int GenerateI2CStop(unsigned char i2c_port);
 #define I2C_PORT_2               2
 
 extern unsigned int etm_i2c1_error_count; // This global variable counts the number of i2c_errors.  It may be useful for code bebugging and validation
-extern unsigned int etm_i2c2_error_count; // This global variable counts the number of i2c_errors.  It may be useful for code bebugging and validation
 
+#if defined(_I2C2MD)
+extern unsigned int etm_i2c2_error_count; // This global variable counts the number of i2c_errors.  It may be useful for code bebugging and validation
+#endif
 
 #endif
