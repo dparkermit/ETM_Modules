@@ -11,9 +11,12 @@
 	.global _saturation_scale13Q3_count
 	_saturation_makescale13Q3_count:	.space 2
 	.global _saturation_makescale13Q3_count
-	_saturation_scale16_count:	.space 2
+	_saturation_scale16_count:		.space 2
 	.global _saturation_scale16_count
+	_etm_scale16bit_saturation_count:	.space 2
+	.global _etm_scale16bit_saturation_count
 .text
+
 
 
 	
@@ -23,7 +26,8 @@ _AverageADC128:
 	mov		W0, W4		; move source address
 	CLR		A		; 0 40 bit Acc
 
-ACC_S:	REPEAT	#127			; add em all up
+ADCAVG128_S:
+	REPEAT	#127			; add em all up
 	ADD		[W4++], #4, A ; signed 16 add to ACCA (right shift 4 bits)
 	                                      ; The data that we want is now stored in the 15 LSB of ACCAH and the 1 MSB of ACCAL
 	                                      ; If we shift the data left one bit and call SAC.R the data will be bashed because
@@ -34,6 +38,30 @@ ACC_S:	REPEAT	#127			; add em all up
 	SAC.R           A, W1         ; Move ACCAH to W1
 	AND             #0x0001, W1   ; W1 &= 0x0001
 	IOR             W0, W1, W0    ; WO = WO | W1
+	return
+
+
+
+	
+	
+        .global  _AverageADC16
+        .text
+_AverageADC16:
+	mov		W0, W4		; move source address
+	CLR		A		; 0 40 bit Acc
+
+ADCAVG16:
+	REPEAT	#15			; add em all up
+	ADD		[W4++], #5, A ; signed 16 add to ACCA (right shift 5 bits)
+	                                      ; The data that we want is now stored in the 15 LSB of ACCAH and the 1 MSB of ACCAL
+	                                      ; If we shift the data left one bit and call SAC.R the data will be bashed because
+	                                      ; The accumulator will be signed.  There for we must work around this little problem 
+	SAC		A, W0	      ; Move ACCAH to W0
+	SL		W0, #1, W0    ; Shift W0 left by one bit.  
+ 	SFTAC           A, #-1        ; Shift Accumulator left by one bit.
+	SAC.R           A, W1         ; Move ACCAH to W1
+	AND             #0x0001, W1   ; W1 &= 0x0001
+	IOR             W0, W1, W0    ; W0 = W0 | W1
 	return
 
 
@@ -191,6 +219,36 @@ _RCFilterNTau_AdjustDone:
 
 
 
+
+	;; -------------------------------------------------------------------------
+	
+	.global  _ETMScale16Bit
+	.text
+_ETMScale16Bit:
+	;; w0 is value to get scaled
+	;; w1 is 16 bit fractional scaler (0->0xFFFF(.999985))
+	;; w2 is number of bits to multiply the result by
+
+	SUBR		W2, #16, W3 	; This is the number of bits to shift right the LSW
+	MUL.UU 		W0,W1,W4 	; Multiply W0 by W1 and store in W4:W5, MSW is stored in W5
+	SL		W5,W2,W0	; Shift W5 Left by [W2] (this is the multiplier) and store results in W0 
+	LSR		W4,W3,W1	; Shift W4 Right by [W3] (this is the multiplier) and store results in W1
+	IOR		W0,W1,W0	; OR W0 with W1 and store in W0, this is the result of scale
+	
+	;; Need to check for overflow.  There is not a carry or status bit that does this
+	LSR		W5,W3,W1 	; If this result is not zero, then we have an overflow 
+	CP0 		W1
+	BRA		Z, _ETMScale16bit_no_overflow
+
+	;; There was an overflow in the Math.  
+	;; Increment the overflow counter and set the result to 0xFFFF
+	INC		_etm_scale16bit_saturation_count
+	MOV		#0xFFFF, W0
+_ETMScale16bit_no_overflow:	
+
+	RETURN
+
+	
 
 
 
